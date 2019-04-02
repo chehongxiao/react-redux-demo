@@ -1,0 +1,134 @@
+redux执行流程
+
+1.创建主文件js，比如index.js
+
+2.定义render入口并调用Counter
+	const render = () => ReactDOM.render(
+	  <Counter showtxt={} clickHandle={}/>,$('#wrapper')[0]
+	)
+
+3.定义Counter，也就是React Component，生成DOM结构，render时触发。
+	class Counter extends Component {
+		  render() {
+		  	return <div onClick={this.props.clickHandle}>我是Counter的div。{this.props.showtxt}</div>
+		  }
+	}
+	export default Counter
+
+4.初始化显示，手动调用render()，第一次初始化时定义，后续不在执行。
+	render();
+
+至此，就可以吧Counter内容显示到页面上了。接下来我们就来实现clickHandle事件。
+重要说明：Redux是通过改变状态state来改变视图view的（他们是一一对应的），但是我们不能像React那样setState，只能通过Reducer生成新的state，而Reducer执行是通过store.dispatch调用的。
+基于这一点，我们继续。。。
+
+5.创建store，并绑定reducer
+	const store = createStore(reducer); // createStore的第一个参数必须是个函数，store.dispatch()时执行，该函数就叫reducer
+
+6.定义Action，调用store.dispatch
+	<Counter showtxt={store.getState().showtxt} clickHandle={() => {store.dispatch({ type: 'clickdiv' })}}/>,$('#wrapper')[0]) // 修改步骤2的代码
+
+7.定义Reducer，生成新的state
+	function counter(state = { count: 0, showtxt:'' }, action) {
+	  const count = state.count
+	  switch (action.type) {
+	    case 'clickdiv':
+	      return { count:count+1, showtxt: '你不小心点到了我'+(count + 1)+'次' }
+	    default:
+	      return state
+	  }
+	}
+	说明：这里只修改要state中变化的值，如果state是对象，return的时候需要把其他值带上。
+
+到这里，貌似已经完整了，点击只执行store.dispatch、调用Reducer生成新的state，state又和view绑定自动更新，应该可以了吧？
+实际不可以，因为，上面只是生成了新额state，要想跟view绑定，还有最后一步：监听state变化执行render。
+
+8. 定义state变化监听
+	store.subscribe(render)
+
+至此，redux基本调用流程彻底完成。
+
+
+// ——————————————————————————————————————————————————————————————————————————————————————————————
+// **********************************************************************************************
+// ——————————————————————————————————————————————————————————————————————————————————————————————
+
+
+react redux开发流程
+
+React+Redux 分为两部分，
+	1：UI组件：即React组件，也叫用户自定义UI组件，用于渲染DOM
+	2：容器组件：即Redux逻辑，处理数据和业务逻辑，支持所有Redux API，参考之前的文章，http://www.cnblogs.com/yinluhui0229/p/6709782.html。
+而React+Redux是以上两部分结合起来，方便在React中使用Redux，专用库为React-Redux.js
+React-Redux.js新增了一些新方法：
+	1.Provider：容器跟组件，可直接把外部的state传递给所有子组件和UI组件；
+	2.mapStateToProps：输入逻辑，把外部的state转化为props对象传递给用户自定义UI组件；
+	3.mapDispatchToProps：输出逻辑，根据用户的操作，处理具体Action，并通过dispatch触发更新state；
+	4.connect：根据UI组件、输入逻辑、输出逻辑生成容器组件；
+
+1.创建主文件js，比如index.js
+
+2.定义Render入口，即容器组件
+	ReactDOM.render(
+	  <Provider store={store}>
+	    <App />
+	  </Provider>,
+	  document.getElementById('root')
+	)
+	说明：<Provider>是包裹在所有容器外面的根组件，目的是可以直接传递state给所有子组件。
+	（利用React组件的context,可参考：http://www.cnblogs.com/yinluhui0229/p/6710685.html）
+
+3.connect根据UI组件生成容器组件，并定义输入（mapStateToProps）、输出（mapDispatchToProps）逻辑
+	const App = connect(
+	  mapStateToProps,
+	  mapDispatchToProps
+	)(Counter)
+	说明：
+		connect将用户自定义的UI组件（即Counter）和React-Redux自动生成的容器组件（即App）连起来，目的是：前者负责UI展示，后者负责逻辑处理。
+
+4.定义用户自定义UI组件，即React Component
+	class Counter extends Component {
+	  render() {
+	    const { value, onIncreaseClick } = this.props
+	    return (
+	      <div>
+	        <span>{value}</span>
+	        <button onClick={onIncreaseClick}>累加一次</button>
+	      </div>
+	    )
+	  }
+	}
+
+5.定义输入输出逻辑
+	// 输入逻辑：
+	//    将state映射成props传递给UI组件（即Counter组件）
+	function mapStateToProps(state) {
+	  return {
+	    value: state.count
+	  }
+	}
+
+	// 输出逻辑：
+	//    将用户对UI组件的操作映射成Action，通过dispatch，触发reducer（即conter），生成新的state
+	function mapDispatchToProps(dispatch) {
+	  return {
+	    onIncreaseClick: () => dispatch({ type: 'increase' })
+	  }
+	}
+
+6.创建store，并绑定reducer
+	const store = createStore(counter); // createStore的第一个参数必须是个函数，mapDispatchToProps中执行dispatch()时，该函数就叫reducer
+
+7.定义Reducer，生成新的state
+	function counter(state = { count: 0 }, action) {
+	  const count = state.count
+	  switch (action.type) {
+	    case 'increase':
+	      return { count: count + 1 }
+	    default:
+	      return state
+	  }
+	}
+	说明：state生成之后，会自动触发mapStateToProps，并渲染View，不需要subscribe监听state变化。
+
+
